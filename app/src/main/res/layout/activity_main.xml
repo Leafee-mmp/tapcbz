@@ -17,6 +17,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
+        <!-- Title row -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -44,6 +45,7 @@
                 android:textColor="#f0f0f5" />
         </LinearLayout>
 
+        <!-- Stats -->
         <TextView
             android:id="@+id/tvSubtitle"
             android:layout_width="match_parent"
@@ -53,6 +55,7 @@
             android:textSize="12sp"
             android:layout_marginBottom="10dp" />
 
+        <!-- Select All / Hide row -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -71,16 +74,28 @@
                 android:textColor="#88dd88" />
 
             <Button
-                android:id="@+id/btnIgnoreAll"
+                android:id="@+id/btnHide"
                 android:layout_width="0dp"
                 android:layout_height="34dp"
                 android:layout_weight="1"
-                android:text="Ignore All"
+                android:layout_marginEnd="6dp"
+                android:text="Hide"
                 android:textSize="12sp"
                 android:backgroundTint="#2a1a1a"
                 android:textColor="#dd8888" />
+
+            <Button
+                android:id="@+id/btnShowHidden"
+                android:layout_width="0dp"
+                android:layout_height="34dp"
+                android:layout_weight="1"
+                android:text="Show Hidden"
+                android:textSize="10sp"
+                android:backgroundTint="#1a1a2a"
+                android:textColor="#8888dd" />
         </LinearLayout>
 
+        <!-- CBZ name -->
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
