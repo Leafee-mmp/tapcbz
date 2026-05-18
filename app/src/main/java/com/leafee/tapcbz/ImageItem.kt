@@ -8,5 +8,5 @@ data class ImageItem(
     val uri: Uri,
     val dateAdded: Long,
     val size: Long,
-    var ignored: Boolean = false
+    var hidden: Boolean = false
 )
