@@ -1,6 +1,7 @@
 package com.leafee.tapcbz
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -25,7 +26,11 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var adapter: ImageAdapter
-    private val imageItems = mutableListOf<ImageItem>()
+    private val allItems = mutableListOf<ImageItem>()
+    private val visibleItems = mutableListOf<ImageItem>()
+    private var showingHidden = false
+
+    private val prefs by lazy { getSharedPreferences("tapcbz_prefs", Context.MODE_PRIVATE) }
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -44,10 +49,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupRecyclerView() {
-        adapter = ImageAdapter(imageItems) { item ->
-            item.ignored = !item.ignored
-            adapter.notifyItemChanged(imageItems.indexOf(item))
-            updateSubtitle()
+        adapter = ImageAdapter(visibleItems) { item ->
+            if (showingHidden && item.hidden) {
+                // Unhide on tap when in show hidden mode
+                setHidden(item, false)
+                refreshVisible()
+            } else if (!item.hidden) {
+                // Hide on tap in normal mode
+                setHidden(item, true)
+                refreshVisible()
+            }
         }
         binding.recyclerView.layoutManager = GridLayoutManager(this, 3)
         binding.recyclerView.adapter = adapter
@@ -56,32 +67,75 @@ class MainActivity : AppCompatActivity() {
     private fun setupButtons() {
         binding.btnScan.setOnClickListener { checkPermissionsAndScan() }
 
+        binding.btnSelectAll.setOnClickListener {
+            // Select all = unhide all hidden items
+            allItems.forEach { setHidden(it, false) }
+            refreshVisible()
+        }
+
+        binding.btnHide.setOnClickListener {
+            // Hide all currently visible items
+            visibleItems.forEach { setHidden(it, true) }
+            refreshVisible()
+        }
+
+        binding.btnShowHidden.setOnClickListener {
+            showingHidden = !showingHidden
+            adapter.showHidden = showingHidden
+            binding.btnShowHidden.text = if (showingHidden) "Hide Hidden" else "Show Hidden"
+            binding.btnShowHidden.backgroundTintList =
+                android.content.res.ColorStateList.valueOf(
+                    if (showingHidden) 0xFF2a1a2a.toInt() else 0xFF1a1a2a.toInt()
+                )
+            refreshVisible()
+        }
+
         binding.btnPack.setOnClickListener {
             val name = binding.etCbzName.text.toString().trim()
             if (name.isEmpty()) {
                 binding.etCbzName.error = "Enter a name for the CBZ"
                 return@setOnClickListener
             }
-            val selected = imageItems.filter { !it.ignored }
+            val selected = allItems.filter { !it.hidden }
             if (selected.isEmpty()) {
                 Toast.makeText(this, "No images selected", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
             packCbz(name, selected)
         }
-
-        binding.btnSelectAll.setOnClickListener {
-            imageItems.forEach { it.ignored = false }
-            adapter.notifyDataSetChanged()
-            updateSubtitle()
-        }
-
-        binding.btnIgnoreAll.setOnClickListener {
-            imageItems.forEach { it.ignored = true }
-            adapter.notifyDataSetChanged()
-            updateSubtitle()
-        }
     }
+
+    // ── Hidden state persistence ─────────────────────────────────────────────
+
+    private fun loadHiddenSet(): MutableSet<String> {
+        return prefs.getStringSet("hidden_files", emptySet())!!.toMutableSet()
+    }
+
+    private fun saveHiddenSet(set: Set<String>) {
+        prefs.edit().putStringSet("hidden_files", set).apply()
+    }
+
+    private fun setHidden(item: ImageItem, hidden: Boolean) {
+        item.hidden = hidden
+        val current = loadHiddenSet()
+        if (hidden) current.add(item.name) else current.remove(item.name)
+        saveHiddenSet(current)
+    }
+
+    // ── Refresh visible list ─────────────────────────────────────────────────
+
+    private fun refreshVisible() {
+        visibleItems.clear()
+        if (showingHidden) {
+            visibleItems.addAll(allItems)
+        } else {
+            visibleItems.addAll(allItems.filter { !it.hidden })
+        }
+        adapter.notifyDataSetChanged()
+        updateSubtitle()
+    }
+
+    // ── Permissions ──────────────────────────────────────────────────────────
 
     private fun checkPermissionsAndScan() {
         val needed = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
@@ -89,11 +143,13 @@ class MainActivity : AppCompatActivity() {
         else
             arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
 
-        if (needed.all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED })
-            scanDownloads()
-        else
-            permissionLauncher.launch(needed)
+        if (needed.all {
+                ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+            }) scanDownloads()
+        else permissionLauncher.launch(needed)
     }
+
+    // ── Scan ─────────────────────────────────────────────────────────────────
 
     private fun scanDownloads() {
         lifecycleScope.launch {
@@ -101,11 +157,15 @@ class MainActivity : AppCompatActivity() {
             binding.btnPack.isEnabled = false
 
             val found = withContext(Dispatchers.IO) { queryDownloadImages() }
+            val hiddenSet = loadHiddenSet()
 
-            imageItems.clear()
-            imageItems.addAll(found)
-            adapter.notifyDataSetChanged()
-            updateSubtitle()
+            allItems.clear()
+            allItems.addAll(found.map { item ->
+                item.hidden = hiddenSet.contains(item.name)
+                item
+            })
+
+            refreshVisible()
 
             binding.progressBar.visibility = View.GONE
             binding.btnPack.isEnabled = true
@@ -163,7 +223,7 @@ class MainActivity : AppCompatActivity() {
             val pa = partsA[i]; val pb = partsB[i]
             val numA = pa.toLongOrNull(); val numB = pb.toLongOrNull()
             val cmp = if (numA != null && numB != null) numA.compareTo(numB)
-                      else pa.compareTo(pb, ignoreCase = true)
+            else pa.compareTo(pb, ignoreCase = true)
             if (cmp != 0) return@Comparator cmp
         }
         partsA.size.compareTo(partsB.size)
@@ -171,6 +231,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun splitNatural(s: String): List<String> =
         Regex("(\\d+|\\D+)").findAll(s).map { it.value }.toList()
+
+    // ── Pack ─────────────────────────────────────────────────────────────────
 
     private fun packCbz(name: String, selected: List<ImageItem>) {
         lifecycleScope.launch {
@@ -206,9 +268,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // ── Subtitle ─────────────────────────────────────────────────────────────
+
     private fun updateSubtitle() {
-        val total = imageItems.size
-        val ignored = imageItems.count { it.ignored }
-        binding.tvSubtitle.text = "${total - ignored} selected · $ignored ignored · $total total"
+        val total = allItems.size
+        val hidden = allItems.count { it.hidden }
+        val selected = total - hidden
+        binding.tvSubtitle.text = "$selected selected · $hidden hidden · $total total"
     }
 }
