@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.TapCBZ" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#e8ff47</item>
+        <item name="colorPrimaryVariant">#b8cc30</item>
+        <item name="colorOnPrimary">#0d0d0f</item>
+        <item name="colorSecondary">#ff6b47</item>
+        <item name="colorOnSecondary">#0d0d0f</item>
+        <item name="android:windowBackground">#0d0d0f</item>
+        <item name="android:statusBarColor">#141418</item>
+        <item name="android:navigationBarColor">#0d0d0f</item>
+    </style>
+</resources>
